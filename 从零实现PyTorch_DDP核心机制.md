@@ -29,30 +29,37 @@
 假设 GPU0 上参数 $\theta$ 的梯度为 $g_0$， GPU1 上参数 $\theta$ 的梯度为 $g_1$，学习率为 $lr$，两张卡各自更新参数（以 SGD 优化器为例）：
 
 * GPU0：
-  $$
-  \theta_0 = \theta - lr * g_0
-  $$
+
+$$
+\theta_0 = \theta - lr * g_0
+$$
   
 * GPU1：
-  $$
-  \theta_1 = \theta - lr * g_1
-  $$
+
+$$
+\theta_1 = \theta - lr * g_1
+$$
   
 
-由于输入不同，所以 $g_0 \neq g_1$，于是 $\theta_0 \neq \theta_1$，若两张 GPU 使用各自的参数（$\theta_0$ 和 $\theta_1$）进行下一步迭代，模型的参数差距会越来越大，最终导致每张 GPU 各自训练一个模型，这显然不是我们想要的。DDP 为了解决这个问题，采用如下策略：
+由于输入不同，所以 $g_0 \neq g_1$，于是 $\theta_0 \neq \theta_1$，若两张 GPU 使用各自的参数（ $\theta_0$ 和 $\theta_1$ ）进行下一步迭代，模型的参数差距会越来越大，最终导致每张 GPU 各自训练一个模型，这显然不是我们想要的。DDP 为了解决这个问题，采用如下策略：
 
-* 每张卡分别计算各自的梯度 $g_i$，$i \in \{0,1,\dots,N-1\}$，N 为总的 GPU 数量
+* 每张卡分别计算各自的梯度 $g_i$， $i \in \{0,1,\dots,N-1\}$，N 为总的 GPU 数量
 
 * 再计算平均梯度
-  $$
-  g_{avg} = \frac{1}{N} \sum_{i=0}^{N-1} g_i
-  $$
+
+$$
+g_{avg} = \frac{1}{N} \sum_{i=0}^{N-1} g_i
+$$
 
 * 然后每张卡使用相同的梯度 $g_{avg}$ 更新参数
-  $$
-  \theta_0 = \theta_0 - lr * g_{avg} \\
-  \theta_1 = \theta_1 - lr * g_{avg}
-  $$
+
+$$
+\theta_0 = \theta_0 - lr * g_{avg}
+$$
+
+$$
+\theta_1 = \theta_1 - lr * g_{avg}
+$$
   
 
 这就保证了每张卡上的参数始终一致。
@@ -61,7 +68,7 @@
 
 大家或许会好奇，为什么对**梯度做一下全局归约**就让 DDP 等价于单卡大 batch size 了呢？
 
-假设共有 N 张 GPU，每张卡上计算出的损失为 $l_i$，$i \in \{0,1,\dots,N-1\}$，则在**单卡场景**下：
+假设共有 N 张 GPU，每张卡上计算出的损失为 $l_i$， $i \in \{0,1,\dots,N-1\}$，则在**单卡场景**下：
 
 * 单卡 loss：
 
@@ -69,7 +76,7 @@ $$
 L = \frac{1}{N} \sum_{i=0}^{N-1} l_i
 $$
 
-* 梯度（$\nabla_{\theta} L$ 表示损失函数 $L$ 关于参数 $\theta$ 的梯度）：
+* 梯度（ $\nabla_{\theta} L$ 表示损失函数 $L$ 关于参数 $\theta$ 的梯度）：
 
 $$
 \nabla_{\theta} L = \nabla_\theta \left( \frac{1}{N} \sum_{i=0}^{N-1} l_i \right)
@@ -84,19 +91,22 @@ $$
 在多卡场景下：
 
 * 第 $i$ 张卡的梯度：
-  $$
-  g_i = \nabla_\theta l_i
-  $$
+
+$$
+g_i = \nabla_\theta l_i
+$$
 
 * 对每张卡的梯度做全局归约：
-  $$
-  g_{avg} = \frac{1}{N} \sum_{i=0}^{N-1} \nabla_\theta l_i
-  $$
+
+$$
+g_{avg} = \frac{1}{N} \sum_{i=0}^{N-1} \nabla_\theta l_i
+$$
 
 * 这正好就是单卡场景中的 $\nabla_{\theta} L$，即：
-  $$
-  g_{avg} = \nabla_{\theta} L = \frac{1}{N} \sum_{i=0}^{N-1} \nabla_\theta l_i
-  $$
+
+$$
+g_{avg} = \nabla_{\theta} L = \frac{1}{N} \sum_{i=0}^{N-1} \nabla_\theta l_i
+$$
 
 所以 DDP 的全局归约梯度与单卡大 batch size 的梯度是一样的，基于相同的梯度更新参数，训练结果当然就是等价的啦！
 
@@ -108,10 +118,13 @@ $$
 * 为什么不能只同步每张卡的 loss？
 
 先来看看第一个问题，每张卡单独更新参数，即：
+
 $$
 \theta_i = \theta - lr * g_i
 $$
+
 最后同步：
+
 $$
 \begin{aligned}
 \theta &= \frac{1}{N} \sum_{i=0}^{N-1} \theta_i \\
@@ -120,11 +133,13 @@ $$
 &= \theta - lr * g_{avg}
 \end{aligned}
 $$
+
 乍一看，似乎和同步梯度的效果一样欸！但实际上，这只在使用 **SGD 优化器**时成立。可是，现代的大模型训练根本不用纯 SGD，所以这种方法实际不可行！
 
 以 Adam 优化器为例：
 
 其维护一阶动量 $m$ 和二阶动量 $v$，参数更新公式为：
+
 $$
 \begin{aligned}
 & m_t = \beta_1 \cdot m_{t-1} + (1 - \beta_1) \cdot g_t \\
@@ -134,6 +149,7 @@ $$
 & \theta_t = \theta_{t-1} - lr \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
 \end{aligned}
 $$
+
 显然，这并不具备 SGD 优化器那样的同步参数与同步梯度等价的条件。所以，**不能**每张显卡各自更新参数，最后再同步参数！
 
 再来看看第二个问题，为什么不能只同步每张卡的 loss？
@@ -514,7 +530,7 @@ Phase 1 实现的 MiniDDP 是在反向传播完成后才进行梯度的通信（
 
 如何进一步优化呢？可以参考算子开发中，通过构建**异步流水线**使**访存与计算重叠**的优化思想，反向传播时一边计算梯度，一边发起通信，通过计算与通信的重叠，减少总的耗时，如下图所示：
 
-<img src="./images/计算与通信重叠.png" style="zoom: 67%;" />
+<img src="./images/计算与通信重叠.png" width="706" />
 
 ### 2. Step 1: 修改 MiniDDP
 
@@ -971,7 +987,7 @@ class GradBucket:
 
 * `_build_buckets`：按反向传播顺序为参数分配桶，让同一个 bucket 中的参数在时间上尽量接近地完成梯度计算。以我们前面使用的 `ToyModel` 为例，如下图所示：反向传播先产生 `fc2` 层，再产生 `fc1` 层的梯度，假设 `fc2.weight`、`fc2.bias`  和 `fc1.weight` 正好能装进一个 bucket，就将其装入 bucket0，剩下的 `fc1.bias` 就装入 bucket1；
 
-  <img src="./images/build-bucket.png" style="zoom: 80%;" />
+  <img src="./images/build-bucket.png" width="847" />
 
 * `_seal_bucket`：调用 `GradBucket` 类创建桶，并建立参数到桶的映射关系；
 
@@ -1393,7 +1409,7 @@ MiniDDP 和 PyTorch DDP 之间的距离，不是机制上的鸿沟，而是工�
 
 回头再看整个演进过程，会发现我们反复使用的并不是某个 PyTorch API，而是几种在系统设计中不断出现的思维模式：
 
-其一，**流水线思维 **—— 先让正确的事情串行发生，再找计算和通信之间的空隙，把等待变成重叠。Phase 2 的 Hook 驱动的异步 all-reduce，是这个思维的一次直接实践；
+其一，**流水线思维**—— 先让正确的事情串行发生，再找计算和通信之间的空隙，把等待变成重叠。Phase 2 的 Hook 驱动的异步 all-reduce，是这个思维的一次直接实践；
 
 其二，**批处理思维** —— 单个操作的启动开销是固定的，摊薄它的唯一方式是增大每次操作的数据量。Phase 3 的 Bucket 就是这样一个例子；
 
